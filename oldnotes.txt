@@ -1,0 +1,17 @@
+NOTES FOR MYSELF FOR TOMORROW BEFORE I FORGET
+wii sends udp broadcast on port 20582
+wii doesn't seem to send more, probably can't have multiple clients listening to the same wii?
+it'll send the SLIP_READY thing, dump below:
+b'SLIP_READY\x00\x19\xfd\x01P\xf5wii-3\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+
+format of udp broadcast is explained here:
+https://github.com/project-slippi/slippi-launcher/blob/e92a5e9cb2cd0eeac2015e715bedb490557f429f/src/console/connectionScanner.ts#L32
+
+do a socket.recvfrom(4096) to get the SLIP_READY and the ip address where it came from
+
+print(addr)
+-> ('10.0.1.17', 63222)
+
+beyond that...
+refactor for multiprocessing (no idea if this code would even run up against issues with python threading, probably not though)
+compare hacky "relay" to official relay, i doubt its doing the same thing i'm doing, maybe different protocol?
