@@ -5,14 +5,6 @@ if __name__ == '__main__':
 
     # scan on local network and auto-add any wiis detected
     '''
-    scanner = SlippiDaemon.SlippiConnectionScanner()
-    scanner.scan()
-    for wii in scanner.getList():
-        print(wii.getNic())
-        print(wii.getIP())
-    exit()
-
-
     existingConnections = []
     slippiObjectList = []
     threadList = []
@@ -42,12 +34,14 @@ if __name__ == '__main__':
             thread.join()
         for slippiConnection in slippiObjectList:
             slippiConnection.closeConnection()
+            
+    exit()
 
     '''
 
     # connect to specific wii, mainly for testing
     test = SlippiDaemon.SlippiDaemon()
-    #test.setConnection("10.200.200.128")
+    # specify ip here
     test.setConnection("10.20.204.115")
     #test.enableRelay(31902)
     #test.setConnection("127.0.0.1", 53743)
@@ -57,4 +51,5 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         print("keyboard interrupt")
         test.closeConnection()
+        exit()
 
