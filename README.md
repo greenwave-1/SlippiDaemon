@@ -6,8 +6,10 @@ The reason I wanted this is for automatic replay capture on a given network, wit
 
 This could have been accomplished using the official slippi-js library and node or something, but eh. 
 
-In its current state, its _almost_ usable; there is a random bug I can't replicate easily that causes execution to stop,
-(this is why there are a large amount of print statements in the code, yes I know I should use a debugger).
+In its current state, its _almost_ usable; ~~there is a random bug I can't replicate easily that causes execution to stop,
+(this is why there are a large amount of print statements in the code, yes I know I should use a debugger)~~
+
+I think the bug is fixed, but I can't confirm that.
 
 ## Installation (kinda)
 This is not ready for general usage (see the above bug/bad usability), but if you want to try it:
