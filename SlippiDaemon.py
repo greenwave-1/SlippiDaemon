@@ -242,7 +242,7 @@ class SlippiDaemon:
                             self.metadata["lastFrame"] = int.from_bytes(self.game_payloads[-1][1:5], byteorder="big", signed=True)
                             self.writeFile()
                         self.startTimeStr = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%S")
-                        self.metadata["startAt"] = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+                        self.metadata["startAt"] = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
 
                     self.game_payloads.append(payload["payload"]["data"])
                     self.dataLen += len(payload["payload"]["data"])
