@@ -42,7 +42,8 @@ if __name__ == '__main__':
     # connect to specific wii, mainly for testing
     test = SlippiDaemon.SlippiDaemon()
     # specify ip here
-    test.setConnection("10.20.204.115")
+    #test.setConnection("10.20.204.115")
+    test.setConnection("10.200.200.128")
     #test.enableRelay(31902)
     #test.setConnection("127.0.0.1", 53743)
     try:
