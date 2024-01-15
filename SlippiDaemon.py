@@ -4,16 +4,22 @@ import ubjson
 import datetime
 import os
 
+
 # represents a wii connection detected by its udp broadcast
 class SlippiConnectionBroadcast:
-    def __init__(self, packet, ipAddr):
+    def __init__(self, packet, ipAddr, manualAdd=False):
         self.validWii = False
+        if manualAdd:
+            self.ipAddr = ipAddr
+            self.consoleNick = "Manually Added Wii"
+            return
         if packet[:10] == b"SLIP_READY":
             self.validWii = True
             # https://github.com/project-slippi/slippi-launcher/blob/e92a5e9cb2cd0eeac2015e715bedb490557f429f/src/console/connectionScanner.ts#L32
             self.macAddr = packet[10:16]  # probably not needed? its provided though, so grab it
             self.consoleNick = packet[16:48].decode().replace('\x00', '')  # strip null chars from name
             self.ipAddr = ipAddr
+
 
     def isValid(self):
         if self.validWii:
@@ -26,6 +32,9 @@ class SlippiConnectionBroadcast:
     def getIP(self):
         if self.validWii:
             return self.ipAddr
+
+    def getStr(self):
+        return self.ipAddr + " | " + self.consoleNick
 
 
 # scans and returns any wiis found via udp broadcast
@@ -73,7 +82,7 @@ class SlippiDaemon:
         # working network data stuff
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.slippi_net_ip = None
-        self.slippi_net_port = None  # 51441 is default
+        self.slippi_net_port = 51441  # 51441 is default
         self.game_payloads = []
         self.complete_payloads = []
         self.workingPacket = bytearray()
@@ -104,12 +113,10 @@ class SlippiDaemon:
         self.shouldRun = True
         self.isRunning = False
 
-    def setConnection(self, ip, port=51441):
+    def setConnection(self, ip, port=None):
         self.slippi_net_ip = ip
-        self.slippi_net_port = port
-
-    def getConfigJ(self):
-        return self.jsonObj
+        if port is not None:
+            self.slippi_net_port = port
 
     def enableRelay(self, port=None):
         # randomly get a port if no port provided, or if provided port is invalid
@@ -161,12 +168,17 @@ class SlippiDaemon:
 
     def attemptEstablishConnection(self):
         self.socket.connect((self.slippi_net_ip, self.slippi_net_port))
+
+        # setup initial handshake
         temp = {}
         temp["type"] = 1
-        temp["payload"] = self.getConfigJ()
+        temp["payload"] = self.jsonObj
         encoded = ubjson.dumpb(temp)
         handshake = bytes(len(encoded).to_bytes(4, byteorder='big', signed=False)) + encoded
         self.socket.sendall(handshake)
+
+        # get and interpret data from wii
+        # TODO: probably should be some error checking here
         data = self.socket.recv(4096)
         data_decoded = ubjson.loadb(data[4:])["payload"]
         self.establishedConnection = True
@@ -186,6 +198,7 @@ class SlippiDaemon:
     def getNetworkData(self):
         if not self.establishedConnection:
             self.attemptEstablishConnection()
+            # TODO: leave code here if connect fails
 
         # get our packet
         data = self.socket.recv(4096)
@@ -205,7 +218,7 @@ class SlippiDaemon:
 
             # get the message
             decodedData = self.workingPacket[4:msgLen + 4]
-            self.complete_payloads.append(ubjson.loadb(decodedData))
+            self.complete_payloads.append(ubjson.loadb(decodedData))  # TODO: don't convert here so that relay functionality works again
 
             # remove data we processed
             self.workingPacket = self.workingPacket[msgLen + 4:]
@@ -218,7 +231,7 @@ class SlippiDaemon:
 
             # TODO: either store the payloads undecoded to send here or reencode them
             # TODO: this will not work whatsoever until then
-            if self.relayEnabled:
+            if self.relayEnabled and False:
                 relayPayload = len(payload).to_bytes(4, byteorder='big', signed=False) + payload
                 try:
                     self.relayConn.sendall(relayPayload)
@@ -238,7 +251,7 @@ class SlippiDaemon:
                         if len(self.game_payloads) != 0:
                             # forward one payload because if the detection didn't trigger we probably missed it?
                             # _supposedly_ this can happen, idk if this has been fixed or not
-                            # I am completely guessing that this will work, i have no idea
+                            # I am completely guessing that this will work, I have no idea
                             self.metadata["lastFrame"] = int.from_bytes(self.game_payloads[-1][1:5], byteorder="big", signed=True)
                             self.writeFile()
                         self.startTimeStr = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%S")
