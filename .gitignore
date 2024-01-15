@@ -2,3 +2,4 @@
 *.slp
 *.hex
 /.idea/
+/venv/
