@@ -3,6 +3,7 @@ import socket
 import ubjson
 import datetime
 import os
+from enum import Enum
 
 
 # represents a wii connection detected by its udp broadcast
@@ -12,6 +13,7 @@ class SlippiConnectionBroadcast:
         if manualAdd:
             self.ipAddr = ipAddr
             self.consoleNick = "Manually Added Wii"
+            self.validWii = True  # lot of trust here, will break easily
             return
         if packet[:10] == b"SLIP_READY":
             self.validWii = True
@@ -62,8 +64,16 @@ class SlippiConnectionScanner:
         return self.connectionList
 
 
+class RunningStatus(Enum):
+    NOT_CONNECTED = 1
+    CONNECTED = 2
+    IN_GAME = 3
+    WRITING_FILE = 4
+
+
 class SlippiDaemon:
     def __init__(self, scannedConnection=None):
+        self.status = RunningStatus.NOT_CONNECTED
         # set the stuff used for the initial handshake
         self.jsonObj = {}
         self.jsonObj["cursor"] = bytearray([0, 0, 0, 0, 0, 0, 0, 0])
@@ -113,7 +123,14 @@ class SlippiDaemon:
         self.shouldRun = True
         self.isRunning = False
 
+    def getStatus(self):
+        return self.status
+
+    def getStr(self):
+        return self.slippi_net_ip + " | " + self.consoleNick + " | " + str(self.status)
+
     def setConnection(self, ip, port=None):
+        print("setting ip to:", ip)
         self.slippi_net_ip = ip
         if port is not None:
             self.slippi_net_port = port
@@ -135,6 +152,7 @@ class SlippiDaemon:
         newFilePath = self.consoleNick + "/Game_" + self.startTimeStr + ".slp"
         os.makedirs(os.path.dirname(newFilePath), exist_ok=True)
         with open(newFilePath, "wb") as outFile:
+            self.status = RunningStatus.WRITING_FILE
             outFile.write(self.SLIPPI_FILE_HEADER)
             outFile.write(self.dataLen.to_bytes(4, byteorder='big', signed=False))  # length of data section
             #outFile.write(bytearray([0, 0, 0, 0]))
@@ -152,6 +170,7 @@ class SlippiDaemon:
     def closeConnection(self):
         if self.establishedConnection:
             self.socket.close()
+            self.status = RunningStatus.NOT_CONNECTED
 
     def requestStopProcess(self):
         self.shouldRun = False
@@ -186,14 +205,14 @@ class SlippiDaemon:
         self.nintendontVersion = data_decoded["nintendontVersion"]
         self.jsonObj["clientToken"] = int.from_bytes(data_decoded["clientToken"], byteorder="big")
         self.payload_cursor = int.from_bytes(data_decoded["pos"])
-        if self.consoleNick is None:
-            self.consoleNick = data_decoded["nick"]
+        self.consoleNick = data_decoded["nick"]
 
         if self.relayEnabled:
             print("waiting for relay connection")
             self.relaySocket.listen()
             self.relayConn, addr = self.relaySocket.accept()
             self.relayConn.sendall(data)
+        self.status = RunningStatus.CONNECTED
 
     def getNetworkData(self):
         if not self.establishedConnection:
@@ -254,6 +273,7 @@ class SlippiDaemon:
                             # I am completely guessing that this will work, I have no idea
                             self.metadata["lastFrame"] = int.from_bytes(self.game_payloads[-1][1:5], byteorder="big", signed=True)
                             self.writeFile()
+                        self.status = RunningStatus.IN_GAME
                         self.startTimeStr = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%S")
                         self.metadata["startAt"] = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
 
@@ -269,6 +289,7 @@ class SlippiDaemon:
                         self.metadata["lastFrame"] = int.from_bytes(self.game_payloads[-2][1:5], byteorder="big", signed=True)
                         # write file
                         self.writeFile()
+                        self.status = RunningStatus.CONNECTED
                 else:
                     print("payload is not the expected pointer")
                     print("expected:", self.payload_cursor)

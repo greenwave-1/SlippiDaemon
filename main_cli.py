@@ -26,9 +26,11 @@ if __name__ == '__main__':
                         existingConnections.append(wii)
                     for slippiConnection in slippiObjectList:
                         if not slippiConnection.getRunningStatus() and shouldAutoStartDaemon:
+                            print("starting wii")
                             t = threading.Thread(target=slippiConnection.runProcess)
                             threadList.append(t)
                             t.start()
+
 
     # start listen thread
     listenThread = threading.Thread(target=CLI_Listen_Loop)
@@ -41,7 +43,9 @@ if __name__ == '__main__':
         match cmd[0]:
             case "help":
                 print("help: display this message\n"
-                      "list: shows all detected wiis\n"
+                      "list <arg>: list wiis, flags are:\n"
+                      "\tdetected: shows all wiis detected\n"
+                      "\tconnected: shows all wiis connected\n"
                       "add <ip addr>: adds wii\n"
                       "set <arg> true/false: sets flags used by program, flags are:\n"
                       "\tautocheck: whether the daemon will listen for wiis at all\n"
@@ -50,14 +54,33 @@ if __name__ == '__main__':
                       "exit: exits the program")
 
             case "list":
-                print("Detected Wiis:")
-                for wii in existingConnections:
-                    print(wii.getStr())
+                if len(cmd) < 2:
+                    print("Detected Wiis:")
+                    for wii in existingConnections:
+                        print(wii.getStr())
+                    continue
+                match cmd[1]:
+                    case "detected":
+                        print("Detected Wiis:")
+                        for wii in existingConnections:
+                            print(wii.getStr())
+                    case "connected":
+                        print("Connected Wiis:")
+                        for slippiObject in slippiObjectList:
+                            print(slippiObject.getStr())
+
 
             case "add":
-                temp = SlippiDaemon.SlippiConnectionBroadcast(None, "10.0.0.200", True)
-                existingConnections.append(temp)
-
+                if len(cmd) > 1:
+                    print(cmd[1])
+                    temp2 = SlippiDaemon.SlippiConnectionBroadcast(None, cmd[1], True)
+                    temp = SlippiDaemon.SlippiDaemon(scannedConnection=temp2)
+                    if not temp.getRunningStatus() and shouldAutoStartDaemon:
+                        t = threading.Thread(target=temp.runProcess)
+                        threadList.append(t)
+                        t.start()
+                    slippiObjectList.append(temp)
+                    existingConnections.append(temp2)
             case "set":
                 match cmd[1]:
                     case "autocheck":
