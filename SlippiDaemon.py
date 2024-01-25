@@ -3,6 +3,7 @@ import socket
 import ubjson
 import datetime
 import os
+import yaml
 from enum import Enum
 
 
@@ -72,7 +73,7 @@ class RunningStatus(Enum):
 
 
 class SlippiDaemon:
-    def __init__(self, scannedConnection=None):
+    def __init__(self, loadYAMLConfig=True, scannedConnection=None):
         self.status = RunningStatus.NOT_CONNECTED
         # set the stuff used for the initial handshake
         self.jsonObj = {}
@@ -88,6 +89,11 @@ class SlippiDaemon:
         self.nintendontVersion = "-1"
         # four bytes after this are the len of the data section, can be all 0's (but shouldn't be)
         self.SLIPPI_FILE_HEADER = b'\x7b\x55\x03\x72\x61\x77\x5b\x24\x55\x23\x6c'
+
+        # file write settings
+        self.makeWiiDir = True
+        self.prependWiiName = False
+        self.fileWritePath = "."
 
         # working network data stuff
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -123,6 +129,30 @@ class SlippiDaemon:
         self.shouldRun = True
         self.isRunning = False
 
+        # load config file
+        if loadYAMLConfig:
+            try:
+                with open("daemon.yaml", "r") as confFile:
+                    externalConfig = yaml.safe_load(confFile)
+                    # check settings
+                    if externalConfig["daemon"]["port"] != -1:
+                        self.slippi_net_port = externalConfig["daemon"]["port"]
+                    if externalConfig["daemon"]["relay"] == True:
+                        confPort = None
+                        if externalConfig["daemon"]["relayPort"] != -1:
+                            confPort = externalConfig["daemon"]["relayPort"]
+                        self.enableRelay(port=confPort)
+                    if externalConfig["fileIO"]["makeWiiDir"] == False:
+                        self.makeWiiDir = externalConfig["fileIO"]["makeWiiDir"]
+                    if externalConfig["fileIO"]["prependWiiName"] == True:
+                        self.prependWiiName = externalConfig["fileIO"]["prependWiiName"]
+                    if externalConfig["fileIO"]["fileWritePath"] != -1:
+                        self.fileWritePath = externalConfig["fileIO"]["fileWritePath"]
+
+            except yaml.YAMLError:
+                print("Failed to load external config")
+
+
     def getStatus(self):
         return self.status
 
@@ -130,7 +160,6 @@ class SlippiDaemon:
         return self.slippi_net_ip + " | " + self.consoleNick + " | " + str(self.status)
 
     def setConnection(self, ip, port=None):
-        print("setting ip to:", ip)
         self.slippi_net_ip = ip
         if port is not None:
             self.slippi_net_port = port
@@ -142,15 +171,29 @@ class SlippiDaemon:
         else:
             self.relayPort = port
         self.relaySocket.bind(("127.0.0.1", self.relayPort))  # TODO: this doesn't allow an external connection
-        print("relay listening on", self.relayPort)
+        #print("relay listening on", self.relayPort)
         self.relayEnabled = True
 
     def writeFile(self):
         if len(self.game_payloads) == 0:
+            print("no payloads but attempted to write file")
             return
         # TODO: add ability to set path, and specify not to make folder based on console name
-        newFilePath = self.consoleNick + "/Game_" + self.startTimeStr + ".slp"
-        os.makedirs(os.path.dirname(newFilePath), exist_ok=True)
+        newFilePath = self.fileWritePath
+        if self.makeWiiDir:
+            newFilePath += "/" + self.consoleNick + "/"
+        if self.prependWiiName:
+            newFilePath += self.consoleNick + "_"
+        newFilePath += "Game_" + self.startTimeStr + ".slp"
+        try:
+            os.makedirs(os.path.dirname(newFilePath), exist_ok=True)
+        except os.error:
+            print("Failed to make output directory, check path and perms")
+            print("Final path attempted was:", newFilePath)
+            self.game_payloads.clear()
+            self.startTimeStr = "1970-01-01T000000"
+            self.dataLen = 0
+            return
         with open(newFilePath, "wb") as outFile:
             self.status = RunningStatus.WRITING_FILE
             outFile.write(self.SLIPPI_FILE_HEADER)
@@ -165,7 +208,6 @@ class SlippiDaemon:
         self.game_payloads.clear()
         self.startTimeStr = "1970-01-01T000000"
         self.dataLen = 0
-        print("wrote file")
 
     def closeConnection(self):
         if self.establishedConnection:
@@ -216,6 +258,7 @@ class SlippiDaemon:
 
     def getNetworkData(self):
         if not self.establishedConnection:
+            print("attempting establish connection")
             self.attemptEstablishConnection()
             # TODO: leave code here if connect fails
 
@@ -283,7 +326,7 @@ class SlippiDaemon:
 
                     # check for end of game
                     if payload["payload"]["data"][0] == 0x39:
-                        print("end of replay detected")
+                        print("game end")
                         # end of replay
                         # get last frame
                         self.metadata["lastFrame"] = int.from_bytes(self.game_payloads[-2][1:5], byteorder="big", signed=True)

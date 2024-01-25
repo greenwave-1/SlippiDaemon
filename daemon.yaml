@@ -1,0 +1,9 @@
+daemon:
+  port: -1
+  relay: false
+  relayPort: -1
+
+fileIO:
+  makeWiiDir: true
+  prependWiiName: false
+  fileWritePath: -1
